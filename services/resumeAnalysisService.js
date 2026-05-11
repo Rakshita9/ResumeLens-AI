@@ -5,6 +5,48 @@ const PDFParse = pdfParseModule.PDFParse;
 
 const MAX_RESUME_CHARS = 12000;
 const MAX_JOB_CHARS = 6000;
+const TECH_TERM_WEIGHTS = {
+    java: 12,
+    python: 12,
+    javascript: 10,
+    typescript: 9,
+    react: 9,
+    node: 9,
+    "node.js": 9,
+    spring: 10,
+    "spring boot": 14,
+    django: 12,
+    flask: 10,
+    fastapi: 10,
+    api: 8,
+    "rest api": 10,
+    rest: 6,
+    sql: 8,
+    mysql: 8,
+    postgres: 8,
+    mongodb: 8,
+    aws: 10,
+    docker: 10,
+    kubernetes: 10,
+    git: 4,
+    testing: 7,
+    "unit testing": 9,
+    agile: 4,
+    html: 3,
+    css: 3,
+    oop: 4,
+    dsa: 4,
+    algorithms: 4,
+    machine: 6,
+    "machine learning": 12,
+    pandas: 10,
+    numpy: 10,
+    analytics: 8,
+    data: 6,
+};
+
+const SECTION_TERMS = ["experience", "work experience", "projects", "skills", "education", "summary", "certifications"];
+
 const STOPWORDS = new Set([
     "a",
     "an",
@@ -164,6 +206,99 @@ function dedupeList(items) {
     return result;
 }
 
+function clampScore(value) {
+    return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function getNormalizedTerms(text, terms) {
+    const normalized = normalizeTextForMatch(text);
+    return terms.filter((term) => normalized.includes(term));
+}
+
+function computeWeightedTechFit(jobText, resumeText) {
+    const termEntries = Object.entries(TECH_TERM_WEIGHTS).sort((a, b) => b[0].length - a[0].length);
+    const jobTerms = getNormalizedTerms(jobText, termEntries.map(([term]) => term));
+    const resumeTerms = getNormalizedTerms(resumeText, termEntries.map(([term]) => term));
+    const matchedTerms = [];
+    const missingTerms = [];
+    let totalWeight = 0;
+    let matchedWeight = 0;
+
+    jobTerms.forEach((term) => {
+        const weight = TECH_TERM_WEIGHTS[term] || 1;
+        totalWeight += weight;
+
+        if (resumeTerms.includes(term)) {
+            matchedWeight += weight;
+            matchedTerms.push(term);
+        } else {
+            missingTerms.push(term);
+        }
+    });
+
+    const score = totalWeight ? (matchedWeight / totalWeight) * 100 : 0;
+
+    return {
+        score: clampScore(score),
+        matchedTerms: dedupeList(matchedTerms),
+        missingTerms: dedupeList(missingTerms),
+    };
+}
+
+function countSectionHits(text) {
+    const normalized = normalizeTextForMatch(text);
+    return SECTION_TERMS.filter((term) => normalized.includes(term)).length;
+}
+
+function countBulletMarkers(text) {
+    return countPatternMatches(String(text || ""), /^[\t ]*[-*•]\s+/gm);
+}
+
+function computeEvidenceScore({ rawResumeText, resumeBulletPoints }) {
+    const numericSignal = Math.min(100, countPatternMatches(rawResumeText, /\b\d+(?:\.\d+)?%?\b/g) * 14);
+    const actionSignal = Math.min(100, countPatternMatches(rawResumeText, /\b(built|developed|designed|optimized|led|managed|improved|delivered|implemented|created|collaborat)\b/gi) * 6);
+    const sectionSignal = Math.min(100, countSectionHits(rawResumeText) * 18);
+    const bulletSignal = Math.min(100, Math.max(resumeBulletPoints.length, countBulletMarkers(rawResumeText)) * 12);
+
+    return {
+        score: clampScore((numericSignal * 0.3) + (actionSignal * 0.25) + (sectionSignal * 0.2) + (bulletSignal * 0.25)),
+        numericSignal,
+        actionSignal,
+        sectionSignal,
+        bulletSignal,
+    };
+}
+
+function buildAnalysisConfidence({ rawResumeText, pageCount, analysisSource }) {
+    const textLength = String(rawResumeText || "").trim().length;
+
+    if (analysisSource === "fallback") {
+        return {
+            level: "medium",
+            note: "Gemini was unavailable, so local analysis was used.",
+        };
+    }
+
+    if (pageCount <= 1 && textLength < 1200) {
+        return {
+            level: "low",
+            note: "Only a small amount of resume text was detected, so the score may be conservative.",
+        };
+    }
+
+    if (textLength < 2500) {
+        return {
+            level: "medium",
+            note: "Resume text looks partial, so the match score may be lower than a full-document scan.",
+        };
+    }
+
+    return {
+        level: "high",
+        note: "Enough resume text was detected for a reliable analysis.",
+    };
+}
+
 function buildFallbackBulletPoints({ matchedKeywords, missingKeywords, gaps }) {
     const focusKeywords = dedupeList([...matchedKeywords.slice(0, 3), ...missingKeywords.slice(0, 3)]);
     const primaryKeyword = focusKeywords[0] || "the target role";
@@ -237,17 +372,20 @@ function countPatternMatches(text, pattern) {
     return matches ? matches.length : 0;
 }
 
-function computeScoreBreakdown({ resumeText, matchedKeywords, missingKeywords, resumeBulletPoints }) {
+function computeScoreBreakdown({ rawResumeText, resumeText, matchedKeywords, missingKeywords, resumeBulletPoints, jobText }) {
     const keywordCoverage = getKeywordCoverage(matchedKeywords, missingKeywords);
-    const quantSignal = Math.min(100, countPatternMatches(resumeText, /\b\d+(?:\.\d+)?%?\b/g) * 18);
-    const bulletSignal = Math.min(100, resumeBulletPoints.length * 14);
+    const techFit = computeWeightedTechFit(jobText, resumeText);
+    const evidence = computeEvidenceScore({ rawResumeText, resumeBulletPoints });
     const focusSignal = Math.max(0, 100 - Math.min(100, missingKeywords.length * 12));
+    const clarityBase = Math.max(evidence.bulletSignal, countBulletMarkers(rawResumeText) * 10);
 
     return {
         keywordCoverage,
-        impact: Math.round((quantSignal + bulletSignal) / 2),
-        clarity: Math.round((bulletSignal + focusSignal) / 2),
-        roleFit: Math.round((keywordCoverage * 0.6) + (focusSignal * 0.4)),
+        techFit: techFit.score,
+        impact: clampScore((evidence.numericSignal * 0.4) + (evidence.actionSignal * 0.4) + (evidence.bulletSignal * 0.2)),
+        clarity: clampScore((clarityBase * 0.45) + (evidence.sectionSignal * 0.35) + (focusSignal * 0.2)),
+        roleFit: clampScore((keywordCoverage * 0.18) + (techFit.score * 0.42) + (evidence.score * 0.25) + (focusSignal * 0.15)),
+        evidence: evidence.score,
     };
 }
 
@@ -412,7 +550,9 @@ async function analyzeResumeBuffer({ fileBuffer, fileName, jobDescription }) {
     const pdfData = await parser.getText();
     await parser.destroy();
 
-    const resumeText = truncateText(pdfData.text, MAX_RESUME_CHARS);
+    const rawResumeText = String(pdfData.text || "");
+    const pageCount = Number(pdfData.numpages || pdfData.numPages || pdfData.pages || 1);
+    const resumeText = truncateText(rawResumeText, MAX_RESUME_CHARS);
     const jobText = truncateText(jobDescription, MAX_JOB_CHARS);
 
     const prompt = `You are an ATS resume analyzer.
@@ -442,12 +582,14 @@ Job description:
 ${jobText}`;
 
     let parsed;
+    let analysisSource = "gemini";
 
     try {
         const aiResponse = await generateAIResponse(prompt);
         parsed = parseModelResponse(aiResponse);
     } catch (error) {
         console.log("Gemini unavailable, using local fallback analysis:", error.message || error);
+        analysisSource = "fallback";
         parsed = {
             matchScore: 0,
             summary: "",
@@ -463,6 +605,7 @@ ${jobText}`;
         };
     }
     const fallbackKeywords = pickKeywordMatches(resumeText, jobText);
+    const techFit = computeWeightedTechFit(jobText, resumeText);
     const fallbackBullets = buildFallbackBulletPoints({
         matchedKeywords: fallbackKeywords.matchedKeywords,
         missingKeywords: fallbackKeywords.missingKeywords,
@@ -476,17 +619,22 @@ ${jobText}`;
             ? parsed.resumeBulletPoints
             : dedupeList([...parsed.resumeBulletPoints, ...fallbackBullets]).slice(0, 8);
     const scoreBreakdown = computeScoreBreakdown({
+        rawResumeText,
         resumeText,
         matchedKeywords,
         missingKeywords,
         resumeBulletPoints,
+        jobText,
     });
-    const normalizedMatchScore = parsed.matchScore > 0 ? parsed.matchScore : Math.round(
-        (scoreBreakdown.keywordCoverage * 0.45) +
-        (scoreBreakdown.impact * 0.25) +
-        (scoreBreakdown.clarity * 0.15) +
-        (scoreBreakdown.roleFit * 0.15)
+    const localMatchScore = clampScore(
+        (scoreBreakdown.keywordCoverage * 0.18) +
+        (scoreBreakdown.techFit * 0.34) +
+        (scoreBreakdown.evidence * 0.28) +
+        (scoreBreakdown.roleFit * 0.20)
     );
+    const normalizedMatchScore = parsed.matchScore > 0
+        ? clampScore((parsed.matchScore * 0.6) + (localMatchScore * 0.4))
+        : localMatchScore;
     const gaps = parsed.gaps.length ? parsed.gaps : buildFallbackGaps({
         missingKeywords,
         matchedKeywords,
@@ -512,6 +660,11 @@ ${jobText}`;
         matchedKeywords,
         missingKeywords,
     });
+    const analysisConfidence = buildAnalysisConfidence({
+        rawResumeText,
+        pageCount,
+        analysisSource,
+    });
 
     return {
         fileName,
@@ -536,6 +689,8 @@ ${jobText}`;
         atsReadiness,
         scoreBreakdown,
         actionVerbs,
+        analysisSource,
+        analysisConfidence,
     };
 }
 

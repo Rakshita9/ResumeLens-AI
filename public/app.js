@@ -9,6 +9,8 @@ const summaryText = document.getElementById("summaryText");
 const atsReadinessText = document.getElementById("atsReadinessText");
 const headlineText = document.getElementById("headlineText");
 const keywordCoverageText = document.getElementById("keywordCoverageText");
+const analysisSourceText = document.getElementById("analysisSourceText");
+const analysisConfidenceText = document.getElementById("analysisConfidenceText");
 const strengthList = document.getElementById("strengthList");
 const gapList = document.getElementById("gapList");
 const missingKeywordsList = document.getElementById("missingKeywordsList");
@@ -69,9 +71,11 @@ function renderScoreBars(target, breakdown) {
     const entries = breakdown || {};
     const labels = [
         ["keywordCoverage", "Keyword Coverage"],
+        ["techFit", "Tech Fit"],
         ["impact", "Impact"],
         ["clarity", "Clarity"],
         ["roleFit", "Role Fit"],
+        ["evidence", "Evidence"],
     ];
 
     labels.forEach(([key, label]) => {
@@ -156,12 +160,14 @@ form.addEventListener("submit", async (event) => {
         }
 
         scoreValue.textContent = `${data.matchScore || 0}`;
-        statusText.textContent = "Analysis complete.";
+        statusText.textContent = data.analysisConfidence?.note || "Analysis complete.";
         fileLabel.textContent = data.fileName || file.name;
         summaryText.textContent = data.summary || "No summary available.";
         atsReadinessText.textContent = data.atsReadiness || "--";
         headlineText.textContent = data.resumeHeadline || "No headline generated.";
         keywordCoverageText.textContent = `${data.scoreBreakdown?.keywordCoverage ?? 0}%`;
+        analysisSourceText.textContent = data.analysisSource === "fallback" ? "Fallback" : "Gemini";
+        analysisConfidenceText.textContent = data.analysisConfidence?.level || "--";
         renderScoreBars(scoreBreakdown, data.scoreBreakdown);
         renderList(strengthList, data.strengths, "No strengths returned.");
         renderList(gapList, data.gaps, "No gaps returned.");
