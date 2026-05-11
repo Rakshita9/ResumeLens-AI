@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Resume Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">AI Resume Analyzer</p>
+                <h1>Compare your resume with a job description and generate better bullets.</h1>
+                <p class="lede">Upload a PDF resume, paste the job description, and get ATS-style feedback with matched keywords, gaps, resume bullets, and unique career-fit insights.</p>
+                <div class="hero-pills">
+                    <span>PDF upload</span>
+                    <span>Job match score</span>
+                    <span>Headline + readiness</span>
+                </div>
+            </div>
+            <div class="hero-card">
+                <div class="score-ring">
+                    <div>
+                        <span id="scoreValue">--</span>
+                        <small>Match Score</small>
+                    </div>
+                </div>
+                <p id="statusText">Upload a resume and job description to get started.</p>
+            </div>
+        </section>
+
+        <section class="insight-strip">
+            <article class="insight-tile">
+                <span>ATS Readiness</span>
+                <strong id="atsReadinessText">--</strong>
+            </article>
+            <article class="insight-tile">
+                <span>Resume Headline</span>
+                <strong id="headlineText">Waiting for analysis</strong>
+            </article>
+            <article class="insight-tile">
+                <span>Keyword Coverage</span>
+                <strong id="keywordCoverageText">--%</strong>
+            </article>
+        </section>
+
+        <section class="workspace">
+            <form id="analysisForm" class="panel">
+                <div class="field">
+                    <label for="resumeFile">Resume PDF</label>
+                    <div class="dropzone" id="dropzone">
+                        <input id="resumeFile" name="resume" type="file" accept="application/pdf" />
+                        <div>
+                            <strong>Drop your PDF here</strong>
+                            <span>or click to browse</span>
+                        </div>
+                        <p id="fileName">No file selected</p>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="jobDescription">Job Description</label>
+                    <textarea id="jobDescription" name="jobDescription" rows="12" placeholder="Paste the job description here..."></textarea>
+                </div>
+
+                <button type="submit" id="submitBtn">Analyze Resume</button>
+                <p class="hint">The app extracts text from the PDF, compares it to the job description, and returns structured feedback plus bullet points.</p>
+            </form>
+
+            <section class="panel results">
+                <div class="results-head">
+                    <h2>Analysis Results</h2>
+                    <span id="fileLabel">Waiting for upload</span>
+                </div>
+
+                <div class="result-grid">
+                    <article class="result-card result-card--summary">
+                        <h3>Summary</h3>
+                        <p id="summaryText">No analysis yet.</p>
+                    </article>
+                    <article class="result-card">
+                        <h3>Score Breakdown</h3>
+                        <div class="metric-bars" id="scoreBreakdown"></div>
+                    </article>
+                    <article class="result-card">
+                        <h3>Strengths</h3>
+                        <ul id="strengthList" class="list"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Gaps</h3>
+                        <ul id="gapList" class="list"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Missing Keywords</h3>
+                        <ul id="missingKeywordsList" class="chips"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Matched Keywords</h3>
+                        <ul id="matchedKeywordsList" class="chips"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Resume Bullet Points</h3>
+                        <ul id="bulletList" class="list bullets"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Action Verbs</h3>
+                        <ul id="actionVerbsList" class="chips chips--verbs"></ul>
+                    </article>
+                    <article class="result-card">
+                        <h3>Next Steps</h3>
+                        <ul id="nextStepsList" class="list"></ul>
+                    </article>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
