@@ -38,7 +38,7 @@ server/
   app.js
   package.json
   public/
-    app.js
+    frontendApp.js
     index.html
     styles.css
   routes/

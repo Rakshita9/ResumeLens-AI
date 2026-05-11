@@ -632,8 +632,12 @@ ${jobText}`;
         (scoreBreakdown.evidence * 0.28) +
         (scoreBreakdown.roleFit * 0.20)
     );
-    const normalizedMatchScore = parsed.matchScore > 0
-        ? clampScore((parsed.matchScore * 0.6) + (localMatchScore * 0.4))
+    const llmScore =
+        analysisSource === "gemini" && Number.isFinite(parsed.matchScore)
+            ? clampScore(parsed.matchScore)
+            : localMatchScore;
+    const normalizedMatchScore = analysisSource === "gemini"
+        ? clampScore((llmScore * 0.6) + (localMatchScore * 0.4))
         : localMatchScore;
     const gaps = parsed.gaps.length ? parsed.gaps : buildFallbackGaps({
         missingKeywords,
