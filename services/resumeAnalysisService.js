@@ -5,45 +5,7 @@ const PDFParse = pdfParseModule.PDFParse;
 
 const MAX_RESUME_CHARS = 12000;
 const MAX_JOB_CHARS = 6000;
-const TECH_TERM_WEIGHTS = {
-    java: 12,
-    python: 12,
-    javascript: 10,
-    typescript: 9,
-    react: 9,
-    node: 9,
-    "node.js": 9,
-    spring: 10,
-    "spring boot": 14,
-    django: 12,
-    flask: 10,
-    fastapi: 10,
-    api: 8,
-    "rest api": 10,
-    rest: 6,
-    sql: 8,
-    mysql: 8,
-    postgres: 8,
-    mongodb: 8,
-    aws: 10,
-    docker: 10,
-    kubernetes: 10,
-    git: 4,
-    testing: 7,
-    "unit testing": 9,
-    agile: 4,
-    html: 3,
-    css: 3,
-    oop: 4,
-    dsa: 4,
-    algorithms: 4,
-    machine: 6,
-    "machine learning": 12,
-    pandas: 10,
-    numpy: 10,
-    analytics: 8,
-    data: 6,
-};
+
 
 const SECTION_TERMS = ["experience", "work experience", "projects", "skills", "education", "summary", "certifications"];
 
@@ -98,6 +60,26 @@ const STOPWORDS = new Set([
     "working",
     "years",
 ]);
+
+
+
+function extractSkillCandidates(text) {
+    const normalized = normalizeTextForMatch(text);
+
+    const rawSkills = normalized
+        .split(/[^a-z0-9+#. ]/g)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    const freq = new Map();
+
+    rawSkills.forEach(word => {
+        if (word.length < 2) return;
+        freq.set(word, (freq.get(word) || 0) + 1);
+    });
+
+    return freq;
+}
 
 function truncateText(text, maxLength) {
     const normalized = String(text || "").replace(/\s+/g, " ").trim();
@@ -216,32 +198,35 @@ function getNormalizedTerms(text, terms) {
 }
 
 function computeWeightedTechFit(jobText, resumeText) {
-    const termEntries = Object.entries(TECH_TERM_WEIGHTS).sort((a, b) => b[0].length - a[0].length);
-    const jobTerms = getNormalizedTerms(jobText, termEntries.map(([term]) => term));
-    const resumeTerms = getNormalizedTerms(resumeText, termEntries.map(([term]) => term));
-    const matchedTerms = [];
-    const missingTerms = [];
+    const jobSkills = extractSkillCandidates(jobText);
+    const resumeNormalized = normalizeTextForMatch(resumeText);
+
     let totalWeight = 0;
     let matchedWeight = 0;
 
-    jobTerms.forEach((term) => {
-        const weight = TECH_TERM_WEIGHTS[term] || 1;
+    const matchedTerms = [];
+    const missingTerms = [];
+
+    for (const [skill, freq] of jobSkills.entries()) {
+        const weight = Math.min(15, 5 + freq * 3);
         totalWeight += weight;
 
-        if (resumeTerms.includes(term)) {
+        const exists = resumeNormalized.includes(skill);
+
+        if (exists) {
             matchedWeight += weight;
-            matchedTerms.push(term);
+            matchedTerms.push(skill);
         } else {
-            missingTerms.push(term);
+            missingTerms.push(skill);
         }
-    });
+    }
 
     const score = totalWeight ? (matchedWeight / totalWeight) * 100 : 0;
 
     return {
         score: clampScore(score),
-        matchedTerms: dedupeList(matchedTerms),
-        missingTerms: dedupeList(missingTerms),
+        matchedTerms: dedupeList(matchedTerms).slice(0, 12),
+        missingTerms: dedupeList(missingTerms).slice(0, 12),
     };
 }
 
