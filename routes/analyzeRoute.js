@@ -9,9 +9,13 @@ const upload = multer({
         fileSize: 10 * 1024 * 1024,
     },
     fileFilter: (req, file, cb) => {
-        if (file.mimetype !== "application/pdf") {
-            return cb(new Error("Only PDF files are allowed."));
-        }
+       const isPdf =
+        file.mimetype.includes("pdf") ||
+        file.originalname.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+        return cb(new Error("Only PDF files are allowed."));
+    }
 
         cb(null, true);
     },
